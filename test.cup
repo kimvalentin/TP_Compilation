@@ -1,0 +1,97 @@
+package tp2compile;
+import java_cup.runtime.*;
+import java.util.*;
+
+/* inclusion du code */
+action code {: 
+	static Boolean errDiv = false;
+	static Boolean errDoesNotExist = false;
+	static Hashtable<String, Integer> h = new Hashtable<String, Integer>();
+	
+	private static int getHash(String toCheck){
+		if(h.get(toCheck) != null){
+			return h.get(toCheck);
+		}
+		else{
+			System.err.println("ID <" + toCheck + "> not defined yet, please declare before first use !");
+			errDoesNotExist = true;
+			return 0;
+		} 
+	}
+ :} ;
+
+parser code {:
+	public void report_error(String message, Object info) {
+		String m = "Erreur de syntaxe.";
+		if (info instanceof Symbol) {
+			Symbol s = ((Symbol) info);
+		if (s.left >= 0) /* Numéro de ligne */
+			m = m + " ligne : " + (s.left+1);
+		}
+	System.out.println(m);
+}
+:} ;
+
+/* Terminaux */
+terminal				SEMI, PLUS, MINUS, TIMES, DIVIDE, MOD, PAR_G, PAR_D, BEGINAFF, SELECTAFF;
+terminal				UMINUS;
+terminal Integer		ENTIER;
+terminal String			ID;
+
+/* Non terminaux */
+non terminal			expr_list, expr_part;
+non terminal Integer	expr; /* un seul non terminal */
+
+/* Precedences */
+precedence left BEGINAFF, SELECTAFF;
+precedence left PLUS, MINUS;
+precedence left TIMES, DIVIDE, MOD;
+precedence left UMINUS;
+precedence left ID;
+
+
+/* The grammar */
+
+expr_list ::= expr_list expr_part     | 
+              expr_part;
+
+expr_part::= expr:e 
+		{:
+			if (errDiv){
+				System.err.println("Dividing by ZERO is impossible\n");
+				errDiv = false;
+			} else if (errDoesNotExist){
+				errDoesNotExist = false;
+			} else {
+				System.out.println("Eval = "+e.intValue());
+			}
+		:} SEMI | error SEMI ;
+		
+			 
+expr      ::= 
+		  MINUS expr:e             
+	          {: RESULT = new Integer(0 - e.intValue()); :} %prec UMINUS |
+		  expr:e1 PLUS expr:e2    
+	      		{: RESULT = new Integer(e1.intValue() + e2.intValue()); :}   | 
+          expr:e1 MINUS expr:e2    
+          		{: RESULT = new Integer(e1.intValue() - e2.intValue()); :}   | 
+          expr:e1 TIMES expr:e2 
+	      		{: RESULT = new Integer(e1.intValue() * e2.intValue()); :}   | 
+          expr:e1 DIVIDE expr:e2 
+	      		{: 	if (e2.intValue() == 0)
+	      				{errDiv = true; RESULT = 0;}
+	      		 	else
+	      		 		{RESULT = new Integer(e1.intValue() / e2.intValue()); }
+	      		:}   | 
+          expr:e1 MOD expr:e2 
+	      		{: 	if (e2.intValue() == 0)
+	      				{ errDiv = true; RESULT = 0;}
+	      			else
+	      				RESULT = new Integer(e1.intValue() % e2.intValue()); :}   | 
+          ID:s
+          		{: RESULT = getHash(s); :}	|
+          BEGINAFF ID:s SELECTAFF expr:e
+          		{: h.put(s,e.intValue()); RESULT = h.get(s); :} | 
+          ENTIER:n
+          		{: RESULT = n; :}	|
+ 		  PAR_G expr:e PAR_D    {: RESULT = e; :}  ;
